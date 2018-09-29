@@ -30,9 +30,9 @@ Kernel mode
 //      Global variables
 //---------------------------------------------------------------------------
 
-#define NULL_FILTER_FILTER_NAME     L"NullFilter"
+#define TEF_FILTER_NAME     L"TransparentExtensionFilter"
 
-typedef struct _NULL_FILTER_DATA {
+typedef struct _TEF_CONTEXT_DATA {
 
 	//
 	//  The filter handle that results from a call to
@@ -41,7 +41,7 @@ typedef struct _NULL_FILTER_DATA {
 
 	PFLT_FILTER FilterHandle;
 
-} NULL_FILTER_DATA, *PNULL_FILTER_DATA;
+} TEF_CONTEXT_DATA, *PTEF_CONTEXT_DATA;
 
 
 /*************************************************************************
@@ -59,14 +59,36 @@ DriverEntry(
 );
 
 NTSTATUS
-NullUnload(
+TEFUnload (
 	_In_ FLT_FILTER_UNLOAD_FLAGS Flags
 );
 
 NTSTATUS
-NullQueryTeardown(
+TEFQueryTeardown (
 	_In_ PCFLT_RELATED_OBJECTS FltObjects,
 	_In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
+);
+
+FLT_PREOP_CALLBACK_STATUS
+TEFPreCallbackGeneral (
+	_In_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PVOID *CompletionContext
+);
+
+FLT_PREOP_CALLBACK_STATUS
+TEFPreCallbackGeneralNoPostOperation (
+	_In_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PVOID *CompletionContext
+);
+
+FLT_POSTOP_CALLBACK_STATUS
+TEFPostCallbackGeneral (
+	_In_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
 );
 
 //
@@ -74,7 +96,208 @@ NullQueryTeardown(
 //  used throughout NullFilter.
 //
 
-NULL_FILTER_DATA NullFilterData;
+TEF_CONTEXT_DATA g_TEFContext;
+
+CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
+	{ IRP_MJ_CREATE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_CREATE_NAMED_PIPE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_CLOSE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_READ,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_WRITE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_QUERY_INFORMATION,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_SET_INFORMATION,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_QUERY_EA,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_SET_EA,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_FLUSH_BUFFERS,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_QUERY_VOLUME_INFORMATION,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_SET_VOLUME_INFORMATION,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_DIRECTORY_CONTROL,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_FILE_SYSTEM_CONTROL,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_DEVICE_CONTROL,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_INTERNAL_DEVICE_CONTROL,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_SHUTDOWN,
+	0,
+	TEFPreCallbackGeneralNoPostOperation,
+	NULL },                               //post operations not supported
+
+	{ IRP_MJ_LOCK_CONTROL,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_CLEANUP,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_CREATE_MAILSLOT,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_QUERY_SECURITY,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_SET_SECURITY,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_QUERY_QUOTA,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_SET_QUOTA,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_PNP,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_ACQUIRE_FOR_SECTION_SYNCHRONIZATION,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_RELEASE_FOR_SECTION_SYNCHRONIZATION,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_ACQUIRE_FOR_MOD_WRITE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_RELEASE_FOR_MOD_WRITE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_ACQUIRE_FOR_CC_FLUSH,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_RELEASE_FOR_CC_FLUSH,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_FAST_IO_CHECK_IF_POSSIBLE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_NETWORK_QUERY_OPEN,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_MDL_READ,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_MDL_READ_COMPLETE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_PREPARE_MDL_WRITE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_MDL_WRITE_COMPLETE,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_VOLUME_MOUNT,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_VOLUME_DISMOUNT,
+	0,
+	TEFPreCallbackGeneral,
+	TEFPostCallbackGeneral },
+
+	{ IRP_MJ_OPERATION_END }
+};
+
+
 
 //
 //  Assign text sections for each routine.
@@ -98,12 +321,12 @@ CONST FLT_REGISTRATION FilterRegistration = {
 	0,                                  //  Flags
 
 	NULL,                               //  Context
-	NULL,                               //  Operation callbacks
+	Callbacks,                               //  Operation callbacks
 
-	NullUnload,                         //  FilterUnload
+	TEFUnload,                         //  FilterUnload
 
 	NULL,                               //  InstanceSetup
-	NullQueryTeardown,                  //  InstanceQueryTeardown
+	TEFQueryTeardown,                  //  InstanceQueryTeardown
 	NULL,                               //  InstanceTeardownStart
 	NULL,                               //  InstanceTeardownComplete
 
@@ -113,10 +336,68 @@ CONST FLT_REGISTRATION FilterRegistration = {
 
 };
 
-
 /*************************************************************************
 Filter initialization and unload routines.
 *************************************************************************/
+
+FLT_PREOP_CALLBACK_STATUS TEFPreCallbackGeneral(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID * CompletionContext)
+{
+	return STATUS_SUCCESS;
+}
+
+FLT_PREOP_CALLBACK_STATUS TEFPreCallbackGeneralNoPostOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID * CompletionContext)
+{
+	return STATUS_SUCCESS;
+}
+
+FLT_POSTOP_CALLBACK_STATUS  TEFPostCallbackGeneral(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID CompletionContext, FLT_POST_OPERATION_FLAGS Flags)
+{
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS
+TEFQueryTeardown(
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
+)
+/*++
+
+Routine Description:
+
+This is the instance detach routine for this miniFilter driver.
+This is called when an instance is being manually deleted by a
+call to FltDetachVolume or FilterDetach thereby giving us a
+chance to fail that detach request.
+
+Arguments:
+
+FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
+opaque handles to this filter, instance and its associated volume.
+
+Flags - Indicating where this detach request came from.
+
+Return Value:
+
+Returns the status of this operation.
+
+--*/
+{
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(Flags);
+
+	PAGED_CODE();
+
+	return STATUS_SUCCESS;
+}
+
+/*
+#############################################
+########################################
+	DriverEntry and DriverUnload
+########################################
+#############################################
+*/
+
 
 NTSTATUS
 DriverEntry(
@@ -154,7 +435,7 @@ Returns STATUS_SUCCESS.
 
 	status = FltRegisterFilter(DriverObject,
 		&FilterRegistration,
-		&NullFilterData.FilterHandle);
+		&g_TEFContext.FilterHandle);
 
 	FLT_ASSERT(NT_SUCCESS(status));
 
@@ -164,17 +445,17 @@ Returns STATUS_SUCCESS.
 		//  Start filtering i/o
 		//
 
-		status = FltStartFiltering(NullFilterData.FilterHandle);
+		status = FltStartFiltering(g_TEFContext.FilterHandle);
 
 		if (!NT_SUCCESS(status)) {
-			FltUnregisterFilter(NullFilterData.FilterHandle);
+			FltUnregisterFilter(g_TEFContext.FilterHandle);
 		}
 	}
 	return status;
 }
 
 NTSTATUS
-NullUnload(
+TEFUnload(
 	_In_ FLT_FILTER_UNLOAD_FLAGS Flags
 )
 /*++
@@ -200,43 +481,7 @@ Returns the final status of this operation.
 
 	PAGED_CODE();
 
-	FltUnregisterFilter(NullFilterData.FilterHandle);
+	FltUnregisterFilter(g_TEFContext.FilterHandle);
 
 	return STATUS_SUCCESS;
 }
-
-NTSTATUS
-NullQueryTeardown(
-	_In_ PCFLT_RELATED_OBJECTS FltObjects,
-	_In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
-)
-/*++
-
-Routine Description:
-
-This is the instance detach routine for this miniFilter driver.
-This is called when an instance is being manually deleted by a
-call to FltDetachVolume or FilterDetach thereby giving us a
-chance to fail that detach request.
-
-Arguments:
-
-FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
-opaque handles to this filter, instance and its associated volume.
-
-Flags - Indicating where this detach request came from.
-
-Return Value:
-
-Returns the status of this operation.
-
---*/
-{
-	UNREFERENCED_PARAMETER(FltObjects);
-	UNREFERENCED_PARAMETER(Flags);
-
-	PAGED_CODE();
-
-	return STATUS_SUCCESS;
-}
-
