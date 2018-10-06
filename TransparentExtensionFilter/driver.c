@@ -357,6 +357,9 @@ TEFPreCallbackGeneral(
 	- If yes check if file is encrypted on access
 	 - If not - encrypt
 	 - Else decrypt and provide content
+	- READ - decrypt - provide content 
+	- CREATE - encrypt - provide content
+
 	
 	
 	*/
@@ -400,8 +403,14 @@ TEFPreCallbackGeneral(
 	usNewFileName.Length = (USHORT)wcslen(FileName) * sizeof(WCHAR) + (USHORT)wcslen(L".enc") * sizeof(WCHAR) + sizeof(WCHAR);
 	usNewFileName.MaximumLength = usNewFileName.Length;
 	usNewFileName.Buffer = ExAllocatePoolWithTag(NonPagedPool, usNewFileName.Length, 'DFET');
+	if (usNewFileName.Buffer == NULL)
+		goto Exit;
+	RtlZeroMemory(usNewFileName.Buffer, usNewFileName.MaximumLength);
 	wcscpy_s(usNewFileName.Buffer, usNewFileName.Length, FileName);
 	wcscat_s(usNewFileName.Buffer, usNewFileName.Length, L".enc");
+
+	ExFreePool(FltObjects->FileObject->FileName.Buffer);
+	FltObjects->FileObject->FileName = usNewFileName;
 	
 
 Exit:
