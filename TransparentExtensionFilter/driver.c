@@ -21,6 +21,7 @@ Kernel mode
 #include <fltKernel.h>
 #include <dontuse.h>
 #include <suppress.h>
+#include <string.h>
 
 #include "driver.h"
 
@@ -360,21 +361,50 @@ TEFPreCallbackGeneral(
 	
 	*/
 
-	UNICODE_STRING FileName;
-	UNICODE_STRING SubPath;
+	WCHAR* FileName;
+	WCHAR* SubPath = L"\\Test\\ENC\\asd.txt";
+	UNICODE_STRING usNewFileName;
 	LONG Result = 0;
+	UCHAR MajorFunction = Data->Iopb->MajorFunction;
 
-	RtlInitUnicodeString(&SubPath, L"\\Test\\asd.txt");
+	FileName = FltObjects->FileObject->FileName.Buffer;
 
-	RtlCopyUnicodeString(&FileName, &FltObjects->FileObject->FileName);
+	Result = wcscmp(FileName, SubPath);
 
-	Result = RtlCompareUnicodeString(&FileName, &SubPath, FALSE);
+	if (Result != 0)
+		goto Exit;
 
-	if (Result == 0) {
-
-		UNICODE_STRING NewFileName;
-		RtlInitUnicodeString(&NewFileName, L"\\Test\\asd.txt.enc");
+	switch (MajorFunction) {
+	case IRP_MJ_CLOSE: // Deal with last handle to the file being closed
+		// Does not occur in the context of the process which closed the last handle
+		break;
+	case IRP_MJ_CLEANUP: // Occurs in resposne to IRP_MJ_CLOSE 
+							// and requires to clear any process-specific resources associated with the file for which IRP_MJ_CLOSE occured
+		// Does occur in the context of the process which closed the last file handle
+		break;
+	case IRP_MJ_READ:
+		break;
+	case IRP_MJ_CREATE:
+		break;
+	case IRP_MJ_WRITE:
+		break;
+	case IRP_MJ_QUERY_INFORMATION:
+		break;
+	case IRP_MJ_SET_INFORMATION:
+		break;
+	default:
+		break;
 	}
+
+	
+	usNewFileName.Length = (USHORT)wcslen(FileName) * sizeof(WCHAR) + (USHORT)wcslen(L".enc") * sizeof(WCHAR) + sizeof(WCHAR);
+	usNewFileName.MaximumLength = usNewFileName.Length;
+	usNewFileName.Buffer = ExAllocatePoolWithTag(NonPagedPool, usNewFileName.Length, 'DFET');
+	wcscpy_s(usNewFileName.Buffer, usNewFileName.Length, FileName);
+	wcscat_s(usNewFileName.Buffer, usNewFileName.Length, L".enc");
+	
+
+Exit:
 
 	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
@@ -445,12 +475,10 @@ Returns the status of this operation.
 }
 
 /*
-#############################################
-########################################
-	DriverEntry and DriverUnload
-########################################
-#############################################
-*/
+ *	
+ *	DriverEntry and DriverUnload
+ *
+ */
 
 
 NTSTATUS
