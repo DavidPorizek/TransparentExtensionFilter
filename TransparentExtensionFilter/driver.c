@@ -340,19 +340,73 @@ CONST FLT_REGISTRATION FilterRegistration = {
 Filter initialization and unload routines.
 *************************************************************************/
 
-FLT_PREOP_CALLBACK_STATUS TEFPreCallbackGeneral(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID * CompletionContext)
+FLT_PREOP_CALLBACK_STATUS 
+TEFPreCallbackGeneral(
+	_In_ PFLT_CALLBACK_DATA Data, 
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PVOID * CompletionContext
+)
 {
-	return STATUS_SUCCESS;
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+
+	/*
+	- Check for transparent encryption enabled flag
+	- If yes check if file is encrypted on access
+	 - If not - encrypt
+	 - Else decrypt and provide content
+	
+	
+	*/
+
+	UNICODE_STRING FileName;
+	UNICODE_STRING SubPath;
+	LONG Result = 0;
+
+	RtlInitUnicodeString(&SubPath, L"\\Test\\asd.txt");
+
+	RtlCopyUnicodeString(&FileName, &FltObjects->FileObject->FileName);
+
+	Result = RtlCompareUnicodeString(&FileName, &SubPath, FALSE);
+
+	if (Result == 0) {
+
+		UNICODE_STRING NewFileName;
+		RtlInitUnicodeString(&NewFileName, L"\\Test\\asd.txt.enc");
+	}
+
+	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
 
-FLT_PREOP_CALLBACK_STATUS TEFPreCallbackGeneralNoPostOperation(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID * CompletionContext)
+FLT_PREOP_CALLBACK_STATUS 
+TEFPreCallbackGeneralNoPostOperation(
+	_In_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PVOID * CompletionContext
+)
 {
-	return STATUS_SUCCESS;
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+
+	return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
-FLT_POSTOP_CALLBACK_STATUS  TEFPostCallbackGeneral(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID CompletionContext, FLT_POST_OPERATION_FLAGS Flags)
+FLT_POSTOP_CALLBACK_STATUS  
+TEFPostCallbackGeneral(
+	_In_ PFLT_CALLBACK_DATA Data, 
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PVOID CompletionContext,
+	_In_ FLT_POST_OPERATION_FLAGS Flags
+)
 {
-	return STATUS_SUCCESS;
+	UNREFERENCED_PARAMETER(Data);
+	UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+	UNREFERENCED_PARAMETER(Flags);
+
+	return FLT_POSTOP_FINISHED_PROCESSING;
 }
 
 NTSTATUS
