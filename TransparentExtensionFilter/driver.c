@@ -337,6 +337,105 @@ CONST FLT_REGISTRATION FilterRegistration = {
 
 };
 
+VOID
+TEFEncrypt(
+	_In_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PWCHAR FileName,
+	_In_ UCHAR MajorFunction
+)
+{
+	UNREFERENCED_PARAMETER(Data);
+
+	UNICODE_STRING usNewFileName;
+
+	switch (MajorFunction) {
+	case IRP_MJ_CLOSE: // Deal with last handle to the file being closed
+					   // Does not occur in the context of the process which closed the last handle
+					   // Most likely .original -> .enc but it might not be required
+		break;
+	case IRP_MJ_CLEANUP: // Occurs in resposne to IRP_MJ_CLOSE 
+						 // and requires to clear any process-specific resources associated with the file for which IRP_MJ_CLOSE occured
+						 // Does occur in the context of the process which closed the last file handle
+						 // Most likely .original -> .enc but it might not be required
+
+		break;
+	case IRP_MJ_CREATE: // Options checks https://community.osr.com/discussion/77714
+						// On open only .enc -> original
+						// On modification original -> .enc
+		break;
+	case IRP_MJ_WRITE:
+		// original -> .enc
+		break;
+	case IRP_MJ_SET_INFORMATION:
+		// original -> .enc
+		break;
+	default:
+		break;
+	}
+
+	usNewFileName.Length = (USHORT)wcslen(FileName) * sizeof(WCHAR) + (USHORT)wcslen(L".enc") * sizeof(WCHAR);
+	usNewFileName.MaximumLength = usNewFileName.Length;
+	usNewFileName.Buffer = ExAllocatePoolWithTag(NonPagedPool, usNewFileName.Length + sizeof(WCHAR), 'DFET');
+	if (usNewFileName.Buffer == NULL)
+		goto Exit;
+	RtlZeroMemory(usNewFileName.Buffer, usNewFileName.Length + sizeof(WCHAR));
+	wcscpy_s(usNewFileName.Buffer, usNewFileName.Length + sizeof(WCHAR), FileName);
+	wcscat_s(usNewFileName.Buffer, usNewFileName.Length + sizeof(WCHAR), L".enc");
+
+	if (FltObjects->FileObject->FileName.Buffer != NULL)
+		ExFreePool(FltObjects->FileObject->FileName.Buffer);
+
+	FltObjects->FileObject->FileName = usNewFileName;
+
+Exit:
+	return;
+}
+
+VOID
+TEFDecrypt(
+	_In_ PFLT_CALLBACK_DATA Data,
+	_In_ PCFLT_RELATED_OBJECTS FltObjects,
+	_In_ PWCHAR FileName,
+	_In_ UCHAR MajorFunction
+)
+{
+	UNREFERENCED_PARAMETER(Data);
+
+	UNICODE_STRING usNewFileName;
+
+	switch (MajorFunction) {
+	case IRP_MJ_READ:
+		// .enc -> original
+		break;
+	case IRP_MJ_CREATE: // Options checks https://community.osr.com/discussion/77714
+						// On open only .enc -> original
+						// On modification original -> .enc
+		break;
+	case IRP_MJ_QUERY_INFORMATION:
+		// .enc -> original
+		break;
+	default:
+		break;
+	}
+
+	usNewFileName.Length = ((USHORT)wcslen(FileName) - (USHORT)wcslen(L".enc")) * sizeof(WCHAR);
+	usNewFileName.MaximumLength = usNewFileName.Length;
+	usNewFileName.Buffer = ExAllocatePoolWithTag(NonPagedPool, usNewFileName.Length + sizeof(WCHAR), 'DFET');
+	if (usNewFileName.Buffer == NULL)
+		goto Exit;
+	RtlZeroMemory(usNewFileName.Buffer, usNewFileName.Length + sizeof(WCHAR));
+	RtlCopyMemory(usNewFileName.Buffer, FileName, usNewFileName.Length);
+
+	if (FltObjects->FileObject->FileName.Buffer != NULL)
+		ExFreePool(FltObjects->FileObject->FileName.Buffer);
+
+	FltObjects->FileObject->FileName = usNewFileName;
+
+Exit:
+	return;
+}
+
 /*************************************************************************
 Filter initialization and unload routines.
 *************************************************************************/
@@ -359,61 +458,69 @@ TEFPreCallbackGeneral(
 	 - Else decrypt and provide content
 	- READ - decrypt - provide content 
 	- CREATE - encrypt - provide content
-
-	
 	
 	*/
 
-	WCHAR* FileName;
-	WCHAR* SubPath = L"\\Test\\ENC\\asd.txt";
-	UNICODE_STRING usNewFileName;
-	LONG Result = 0;
+	WCHAR* FileName = NULL;
+	WCHAR* OrigName = L"\\Test\\ENC\\asd.txt";
+	WCHAR* EncName = L"\\Test\\ENC\\asd.txt.enc";
+
+	if (Data == NULL || Data->Iopb == NULL)
+		goto Exit;
+
+	if (FltObjects == NULL || FltObjects->FileObject == NULL || FltObjects->FileObject->FileName.Length == 0)
+		goto Exit;
+
 	UCHAR MajorFunction = Data->Iopb->MajorFunction;
 
-	FileName = FltObjects->FileObject->FileName.Buffer;
+	FileName = ExAllocatePoolWithTag(NonPagedPool, FltObjects->FileObject->FileName.Length + sizeof(WCHAR), 'DFET');
+	if (FileName == NULL)
+		goto Exit;
+	RtlZeroMemory(FileName, FltObjects->FileObject->FileName.Length + sizeof(WCHAR));
+	RtlCopyMemory(FileName, FltObjects->FileObject->FileName.Buffer, FltObjects->FileObject->FileName.Length);
 
-	Result = wcscmp(FileName, SubPath);
-
-	if (Result != 0)
+	if (wcscmp(FileName, OrigName) == 0)
+		TEFEncrypt(Data, FltObjects, FileName, MajorFunction);
+	else if (wcscmp(FileName, EncName) == 0)
+		TEFDecrypt(Data, FltObjects, FileName, MajorFunction);
+	else
 		goto Exit;
 
 	switch (MajorFunction) {
 	case IRP_MJ_CLOSE: // Deal with last handle to the file being closed
 		// Does not occur in the context of the process which closed the last handle
+		// Most likely .original -> .enc but it might not be required
 		break;
 	case IRP_MJ_CLEANUP: // Occurs in resposne to IRP_MJ_CLOSE 
 							// and requires to clear any process-specific resources associated with the file for which IRP_MJ_CLOSE occured
 		// Does occur in the context of the process which closed the last file handle
+		// Most likely .original -> .enc but it might not be required
+
 		break;
 	case IRP_MJ_READ:
+		// .enc -> original
 		break;
-	case IRP_MJ_CREATE:
+	case IRP_MJ_CREATE: // Options checks https://community.osr.com/discussion/77714
+		// On open only .enc -> original
+		// On modification original -> .enc
 		break;
 	case IRP_MJ_WRITE:
+		// original -> .enc
 		break;
 	case IRP_MJ_QUERY_INFORMATION:
+		// .enc -> original
 		break;
 	case IRP_MJ_SET_INFORMATION:
+		// original -> .enc
 		break;
 	default:
 		break;
 	}
-
-	
-	usNewFileName.Length = (USHORT)wcslen(FileName) * sizeof(WCHAR) + (USHORT)wcslen(L".enc") * sizeof(WCHAR) + sizeof(WCHAR);
-	usNewFileName.MaximumLength = usNewFileName.Length;
-	usNewFileName.Buffer = ExAllocatePoolWithTag(NonPagedPool, usNewFileName.Length, 'DFET');
-	if (usNewFileName.Buffer == NULL)
-		goto Exit;
-	RtlZeroMemory(usNewFileName.Buffer, usNewFileName.MaximumLength);
-	wcscpy_s(usNewFileName.Buffer, usNewFileName.Length, FileName);
-	wcscat_s(usNewFileName.Buffer, usNewFileName.Length, L".enc");
-
-	ExFreePool(FltObjects->FileObject->FileName.Buffer);
-	FltObjects->FileObject->FileName = usNewFileName;
 	
 
 Exit:
+	if (FileName != NULL)
+		ExFreePoolWithTag(FileName, 'DFET');
 
 	return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
