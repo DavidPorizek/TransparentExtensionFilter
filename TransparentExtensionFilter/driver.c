@@ -337,6 +337,35 @@ CONST FLT_REGISTRATION FilterRegistration = {
 
 };
 
+VOID GetCreateParameters(ULONG Options, ULONG* CreateOptions, ULONG* CreateDisposition)
+{
+	*CreateOptions = Options & 0x00ffffff; // Lower 24 bits
+	*CreateDisposition = Options & 0xff000000; // Upper 8 bits
+}
+
+BOOLEAN GetWriteOperation(ULONG DesiredAccess, ULONG CreateOptions, ULONG CreateDisposition)
+{
+	return ((DesiredAccess &
+		(FILE_WRITE_DATA |
+			// 0x0002
+			FILE_WRITE_ATTRIBUTES |
+			// 0x0100
+			FILE_WRITE_EA |
+			// 0x0010
+			FILE_APPEND_DATA |
+			// 0x0004
+			DELETE |
+			// 0x00010000
+			WRITE_DAC |
+			// 0x00040000
+			WRITE_OWNER)) ||
+		// 0x00080000
+			(CreateDisposition != FILE_OPEN) ||
+		// Modes 0 & 2-5
+		(CreateOptions & FILE_DELETE_ON_CLOSE));
+	// 0x00001000
+}
+
 VOID
 TEFEncrypt(
 	_In_ PFLT_CALLBACK_DATA Data,
@@ -348,6 +377,10 @@ TEFEncrypt(
 	UNREFERENCED_PARAMETER(Data);
 
 	UNICODE_STRING usNewFileName;
+	ULONG DesiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+	ULONG CreateOptions;
+	ULONG CreateDisposition;
+	BOOLEAN WriteOperation;
 
 	switch (MajorFunction) {
 	case IRP_MJ_CLOSE: // Deal with last handle to the file being closed
@@ -363,6 +396,9 @@ TEFEncrypt(
 	case IRP_MJ_CREATE: // Options checks https://community.osr.com/discussion/77714
 						// On open only .enc -> original
 						// On modification original -> .enc
+
+		GetCreateParameters(Data->Iopb->Parameters.Create.Options, &CreateOptions, &CreateDisposition);
+		WriteOperation = GetWriteOperation(DesiredAccess, CreateOptions, CreateDisposition);
 		break;
 	case IRP_MJ_WRITE:
 		// original -> .enc
@@ -403,6 +439,10 @@ TEFDecrypt(
 	UNREFERENCED_PARAMETER(Data);
 
 	UNICODE_STRING usNewFileName;
+	ULONG DesiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+	ULONG CreateOptions;
+	ULONG CreateDisposition;
+	BOOLEAN WriteOperation;
 
 	switch (MajorFunction) {
 	case IRP_MJ_READ:
@@ -411,6 +451,9 @@ TEFDecrypt(
 	case IRP_MJ_CREATE: // Options checks https://community.osr.com/discussion/77714
 						// On open only .enc -> original
 						// On modification original -> .enc
+
+		GetCreateParameters(Data->Iopb->Parameters.Create.Options, &CreateOptions, &CreateDisposition);
+		WriteOperation = GetWriteOperation(DesiredAccess, CreateOptions, CreateDisposition);
 		break;
 	case IRP_MJ_QUERY_INFORMATION:
 		// .enc -> original
