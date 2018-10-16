@@ -377,7 +377,7 @@ TEFEncrypt(
 	UNREFERENCED_PARAMETER(Data);
 
 	UNICODE_STRING usNewFileName;
-	ULONG DesiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+	ULONG DesiredAccess;
 	ULONG CreateOptions;
 	ULONG CreateDisposition;
 	BOOLEAN WriteOperation;
@@ -397,8 +397,14 @@ TEFEncrypt(
 						// On open only .enc -> original
 						// On modification original -> .enc
 
+		DesiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
 		GetCreateParameters(Data->Iopb->Parameters.Create.Options, &CreateOptions, &CreateDisposition);
 		WriteOperation = GetWriteOperation(DesiredAccess, CreateOptions, CreateDisposition);
+		
+		if (!WriteOperation) {
+			goto Exit;
+		}
+
 		break;
 	case IRP_MJ_WRITE:
 		// original -> .enc
@@ -439,7 +445,7 @@ TEFDecrypt(
 	UNREFERENCED_PARAMETER(Data);
 
 	UNICODE_STRING usNewFileName;
-	ULONG DesiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+	ULONG DesiredAccess;
 	ULONG CreateOptions;
 	ULONG CreateDisposition;
 	BOOLEAN WriteOperation;
@@ -452,8 +458,15 @@ TEFDecrypt(
 						// On open only .enc -> original
 						// On modification original -> .enc
 
+		DesiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+
 		GetCreateParameters(Data->Iopb->Parameters.Create.Options, &CreateOptions, &CreateDisposition);
 		WriteOperation = GetWriteOperation(DesiredAccess, CreateOptions, CreateDisposition);
+
+		if (WriteOperation) {
+			goto Exit;
+		}
+
 		break;
 	case IRP_MJ_QUERY_INFORMATION:
 		// .enc -> original
@@ -522,41 +535,62 @@ TEFPreCallbackGeneral(
 	RtlZeroMemory(FileName, FltObjects->FileObject->FileName.Length + sizeof(WCHAR));
 	RtlCopyMemory(FileName, FltObjects->FileObject->FileName.Buffer, FltObjects->FileObject->FileName.Length);
 
+	//if (wcscmp(FileName, OrigName) == 0)
+	//	TEFEncrypt(Data, FltObjects, FileName, MajorFunction);
+	//else if (wcscmp(FileName, EncName) == 0)
+	//	TEFDecrypt(Data, FltObjects, FileName, MajorFunction);
+	//else
+	//	goto Exit;
+
+
 	if (wcscmp(FileName, OrigName) == 0)
-		TEFEncrypt(Data, FltObjects, FileName, MajorFunction);
+		DbgPrint("Found .txt\n");
 	else if (wcscmp(FileName, EncName) == 0)
-		TEFDecrypt(Data, FltObjects, FileName, MajorFunction);
+		DbgPrint("Found .enc\n");
 	else
-		goto Exit;
+		DbgPrint("Not found .txt or .enc\n");
 
 	switch (MajorFunction) {
 	case IRP_MJ_CLOSE: // Deal with last handle to the file being closed
 		// Does not occur in the context of the process which closed the last handle
 		// Most likely .original -> .enc but it might not be required
+		DbgPrint("IRP_MJ_CLOSE\n");
 		break;
 	case IRP_MJ_CLEANUP: // Occurs in resposne to IRP_MJ_CLOSE 
 							// and requires to clear any process-specific resources associated with the file for which IRP_MJ_CLOSE occured
 		// Does occur in the context of the process which closed the last file handle
 		// Most likely .original -> .enc but it might not be required
-
+		DbgPrint("IRP_MJ_CLEANUP\n");
 		break;
 	case IRP_MJ_READ:
 		// .enc -> original
+		DbgPrint("IRP_MJ_READ\n");
 		break;
 	case IRP_MJ_CREATE: // Options checks https://community.osr.com/discussion/77714
 		// On open only .enc -> original
 		// On modification original -> .enc
+		DbgPrint("IRP_MJ_CREATE\n");
 		break;
 	case IRP_MJ_WRITE:
 		// original -> .enc
+		DbgPrint("IRP_MJ_WRITE\n");
 		break;
 	case IRP_MJ_QUERY_INFORMATION:
 		// .enc -> original
+		DbgPrint("IRP_MJ_QUERY_INFORMATION\n");
 		break;
 	case IRP_MJ_SET_INFORMATION:
 		// original -> .enc
+		DbgPrint("IRP_MJ_SET_INFORMATION\n");
+		break;
+	case IRP_MJ_FILE_SYSTEM_CONTROL:
+		DbgPrint("IRP_MJ_FILE_SYSTEM_CONTROL\n");
+		break;
+	case IRP_MJ_QUERY_VOLUME_INFORMATION:
+		DbgPrint("IRP_MJ_QUERY_VOLUME_INFORMATION\n");
 		break;
 	default:
+		DbgPrint("Default\n");
 		break;
 	}
 	
